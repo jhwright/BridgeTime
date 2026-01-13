@@ -214,3 +214,54 @@ export async function uploadPhoto(data: UploadPhotoRequest): Promise<TimeEntryPh
 export async function deletePhoto(photoId: number): Promise<void> {
   await api.delete(`/photos/${photoId}/`);
 }
+
+// Admin API (requires ADMIN_API_KEY)
+export interface AdminEmployee {
+  id: number;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email: string;
+  has_pin: boolean;
+  is_active: boolean;
+}
+
+export interface AddEmployeeRequest {
+  first_name: string;
+  last_name: string;
+  email?: string;
+  pin?: string;
+}
+
+function getAdminHeaders(apiKey: string) {
+  return {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+export async function adminListEmployees(apiKey: string): Promise<AdminEmployee[]> {
+  const response = await api.get<{ employees: AdminEmployee[] }>('/admin/employees/', {
+    headers: getAdminHeaders(apiKey),
+  });
+  return response.data.employees;
+}
+
+export async function adminAddEmployee(apiKey: string, data: AddEmployeeRequest): Promise<AdminEmployee> {
+  const response = await api.post<{ employee: AdminEmployee }>('/admin/employees/add/', data, {
+    headers: getAdminHeaders(apiKey),
+  });
+  return response.data.employee;
+}
+
+export async function adminSetPin(apiKey: string, employeeId: number, pin: string): Promise<void> {
+  await api.post(`/admin/employees/${employeeId}/set-pin/`, { pin }, {
+    headers: getAdminHeaders(apiKey),
+  });
+}
+
+export async function adminDeleteEmployee(apiKey: string, employeeId: number): Promise<void> {
+  await api.delete(`/admin/employees/${employeeId}/delete/`, {
+    headers: getAdminHeaders(apiKey),
+  });
+}

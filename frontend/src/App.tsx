@@ -2,6 +2,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ClockPage } from './pages/ClockPage';
 import { AdminPage } from './pages/AdminPage';
 import { InsightsPage } from './pages/InsightsPage';
+import { EmployeeManagementPage } from './pages/EmployeeManagementPage';
 import { useCurrentEmployee } from './hooks/useCurrentEmployee';
 import './App.css';
 
@@ -22,6 +23,9 @@ function App() {
           <Link to="/admin" className={location.pathname === '/admin' ? 'active' : ''}>
             Admin
           </Link>
+          <Link to="/employees" className={location.pathname === '/employees' ? 'active' : ''}>
+            Employees
+          </Link>
         </div>
         {currentEmployee && (
           <div className="nav-user">
@@ -40,6 +44,7 @@ function App() {
           <Route path="/" element={<ClockPage />} />
           <Route path="/insights" element={<InsightsPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/employees" element={<EmployeeManagementPage />} />
         </Routes>
       </main>
     </div>
