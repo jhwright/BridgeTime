@@ -12,6 +12,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install system dependencies for pillow-heif
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libheif-dev \
+    libde265-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy backend with built frontend static files
 COPY --from=frontend-builder /app/backend/ ./
 
