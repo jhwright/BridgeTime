@@ -1,7 +1,9 @@
 FROM node:18-slim AS frontend-builder
 
+WORKDIR /app
+COPY frontend/package*.json ./frontend/
+COPY backend/ ./backend/
 WORKDIR /app/frontend
-COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ ./
 RUN npm run build
@@ -10,14 +12,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy backend
-COPY backend/requirements.txt ./
+# Copy backend with built frontend static files
+COPY --from=frontend-builder /app/backend/ ./
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
-
-COPY backend/ ./
-
-# Copy built frontend
-COPY --from=frontend-builder /app/frontend/dist ./staticfiles/frontend
 
 # Collect static files
 RUN python manage.py collectstatic --noinput
