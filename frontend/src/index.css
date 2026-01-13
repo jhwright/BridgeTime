@@ -1555,7 +1555,13 @@ body {
 
 .employee-table.compact th,
 .employee-table.compact td {
-  padding: 0.5rem 0.75rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.employee-table .actions {
+  display: flex;
+  gap: 0.25rem;
+  white-space: nowrap;
 }
 
 .employee-table th {
