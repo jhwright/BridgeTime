@@ -753,3 +753,167 @@ class TimeEntryPhotoViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+
+# ============================================
+# Admin API Endpoints (protected by API key)
+# ============================================
+
+import os
+from functools import wraps
+
+
+def require_admin_key(view_func):
+    """Decorator to require ADMIN_API_KEY for admin endpoints."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        admin_key = os.environ.get('ADMIN_API_KEY')
+        if not admin_key:
+            return Response(
+                {'error': 'Admin API not configured'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        # Check Authorization header
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if not auth_header.startswith('Bearer '):
+            return Response(
+                {'error': 'Missing or invalid Authorization header'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        provided_key = auth_header[7:]  # Remove 'Bearer ' prefix
+        if provided_key != admin_key:
+            return Response(
+                {'error': 'Invalid API key'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+@api_view(['GET'])
+@require_admin_key
+def admin_list_employees(request):
+    """List all employees."""
+    employees = Employee.objects.all().order_by('first_name', 'last_name')
+    data = []
+    for emp in employees:
+        data.append({
+            'id': emp.id,
+            'first_name': emp.first_name,
+            'last_name': emp.last_name,
+            'full_name': emp.full_name,
+            'email': emp.email,
+            'has_pin': emp.has_pin,
+            'is_active': emp.is_active,
+        })
+    return Response({'employees': data})
+
+
+@api_view(['POST'])
+@require_admin_key
+def admin_add_employee(request):
+    """Add a new employee."""
+    first_name = request.data.get('first_name')
+    last_name = request.data.get('last_name')
+    email = request.data.get('email', '')
+    pin = request.data.get('pin')
+
+    if not first_name or not last_name:
+        return Response(
+            {'error': 'first_name and last_name are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if Employee.objects.filter(first_name=first_name, last_name=last_name).exists():
+        return Response(
+            {'error': f'Employee "{first_name} {last_name}" already exists'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if pin:
+        if not str(pin).isdigit() or len(str(pin)) < 4 or len(str(pin)) > 10:
+            return Response(
+                {'error': 'PIN must be 4-10 digits'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    employee = Employee.objects.create(
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        is_active=True
+    )
+
+    if pin:
+        employee.set_pin(str(pin))
+        employee.save()
+
+    return Response({
+        'message': f'Created employee: {employee.full_name}',
+        'employee': {
+            'id': employee.id,
+            'full_name': employee.full_name,
+            'email': employee.email,
+            'has_pin': employee.has_pin,
+        }
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@require_admin_key
+def admin_set_pin(request, employee_id):
+    """Set PIN for an employee."""
+    pin = request.data.get('pin')
+
+    if not pin:
+        return Response(
+            {'error': 'pin is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not str(pin).isdigit() or len(str(pin)) < 4 or len(str(pin)) > 10:
+        return Response(
+            {'error': 'PIN must be 4-10 digits'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        employee = Employee.objects.get(id=employee_id)
+    except Employee.DoesNotExist:
+        return Response(
+            {'error': 'Employee not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    employee.set_pin(str(pin))
+    employee.save()
+
+    return Response({
+        'message': f'PIN set for {employee.full_name}',
+        'employee': {
+            'id': employee.id,
+            'full_name': employee.full_name,
+            'has_pin': employee.has_pin,
+        }
+    })
+
+
+@api_view(['DELETE'])
+@require_admin_key
+def admin_delete_employee(request, employee_id):
+    """Delete an employee."""
+    try:
+        employee = Employee.objects.get(id=employee_id)
+    except Employee.DoesNotExist:
+        return Response(
+            {'error': 'Employee not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    full_name = employee.full_name
+    employee.delete()
+
+    return Response({'message': f'Deleted employee: {full_name}'})
