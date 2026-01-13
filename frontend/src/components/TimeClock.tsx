@@ -14,7 +14,7 @@ import {
 } from '../hooks/useApi';
 import type { Employee, JobCodeCategory, JobCode } from '../types';
 
-const STORAGE_KEY = 'bridge-time-employee-id';
+const STORAGE_KEY = 'bridgetime-employee-id';
 
 export function TimeClock() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -111,7 +111,7 @@ export function TimeClock() {
   if (!selectedEmployee) {
     return (
       <div className="time-clock">
-        <h1>Bridge Time</h1>
+        <h1>BridgeTime</h1>
         <EmployeeSelect value={null} onChange={handleEmployeeChange} />
       </div>
     );
@@ -120,7 +120,7 @@ export function TimeClock() {
   if (loadingEntry) {
     return (
       <div className="time-clock">
-        <h1>Bridge Time</h1>
+        <h1>BridgeTime</h1>
         <EmployeeSelect value={selectedEmployee.id} onChange={handleEmployeeChange} />
         <div className="loading">Loading...</div>
       </div>
@@ -131,7 +131,7 @@ export function TimeClock() {
   if (!currentEntry) {
     return (
       <div className="time-clock">
-        <h1>Bridge Time</h1>
+        <h1>BridgeTime</h1>
         <EmployeeSelect value={selectedEmployee.id} onChange={handleEmployeeChange} />
 
         <button
@@ -158,7 +158,7 @@ export function TimeClock() {
   if (currentEntry.is_interruption) {
     return (
       <div className="time-clock">
-        <h1>Bridge Time</h1>
+        <h1>BridgeTime</h1>
         <EmployeeSelect value={selectedEmployee.id} onChange={handleEmployeeChange} />
 
         <ActiveTimer entry={currentEntry} />
@@ -186,7 +186,7 @@ export function TimeClock() {
   // Clocked in (normal)
   return (
     <div className="time-clock">
-      <h1>Bridge Time</h1>
+      <h1>BridgeTime</h1>
       <EmployeeSelect value={selectedEmployee.id} onChange={handleEmployeeChange} />
 
       <ActiveTimer entry={currentEntry} />

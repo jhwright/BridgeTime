@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Bridge Time is a TSheets replacement for Bridge Art Space - a PWA for employee time tracking with Gusto payroll integration. Employees clock in/out of jobs via mobile, with hierarchical job selection and interruption tracking.
+BridgeTime is a TSheets replacement for Bridge Art Space - a PWA for employee time tracking with Gusto payroll integration. Employees clock in/out of jobs via mobile, with hierarchical job selection and interruption tracking.
 
 **Tech Stack**: Django 5.x + DRF backend, React 18 + TypeScript + Vite frontend, SQLite database.
 

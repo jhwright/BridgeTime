@@ -13,7 +13,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'Bridge Time',
+        name: 'BridgeTime',
         short_name: 'BridgeTime',
         description: 'Time tracking for Bridge Art Space',
         theme_color: '#2563eb',
