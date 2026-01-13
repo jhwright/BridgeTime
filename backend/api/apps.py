@@ -1,4 +1,7 @@
 from django.apps import AppConfig
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ApiConfig(AppConfig):
@@ -8,5 +11,9 @@ class ApiConfig(AppConfig):
     def ready(self):
         # Register HEIF/HEIC support with Pillow at startup
         # This allows ImageField to validate HEIC images
-        import pillow_heif
-        pillow_heif.register_heif_opener()
+        try:
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+            logger.info("pillow_heif registered successfully")
+        except ImportError:
+            logger.warning("pillow_heif not available - HEIC support disabled")
