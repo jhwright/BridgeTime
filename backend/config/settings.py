@@ -15,7 +15,20 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-key-change-in-pro
 
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
+# Build ALLOWED_HOSTS from environment
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+# Railway sets RAILWAY_PUBLIC_DOMAIN for the app's domain
+if os.environ.get('RAILWAY_PUBLIC_DOMAIN'):
+    ALLOWED_HOSTS.append(os.environ.get('RAILWAY_PUBLIC_DOMAIN'))
+
+# Also allow Railway's internal networking
+if os.environ.get('RAILWAY_PRIVATE_DOMAIN'):
+    ALLOWED_HOSTS.append(os.environ.get('RAILWAY_PRIVATE_DOMAIN'))
+
+# When running on Railway, allow all hosts (healthchecks come from internal IPs)
+if os.environ.get('RAILWAY_ENVIRONMENT'):
+    ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
