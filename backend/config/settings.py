@@ -4,6 +4,10 @@ Django settings for config project.
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -22,6 +26,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'storages',
     'api',
 ]
 
@@ -78,6 +83,45 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Media files (uploads)
+# Use S3 storage if AWS credentials are configured, otherwise use local storage
+USE_S3_STORAGE = os.environ.get('USE_S3_STORAGE', 'False').lower() == 'true'
+
+if USE_S3_STORAGE:
+    # AWS S3 Configuration
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=86400',
+    }
+    AWS_DEFAULT_ACL = None
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_QUERYSTRING_AUTH = True  # Use presigned URLs
+    AWS_QUERYSTRING_EXPIRE = 3600  # URLs valid for 1 hour
+    AWS_S3_SIGNATURE_VERSION = 's3v4'  # Use v4 signatures
+    AWS_S3_ADDRESSING_STYLE = 'virtual'
+    AWS_LOCATION = 'bridgetime/media'
+
+    # Use S3 for media files
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "location": AWS_LOCATION,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    # Note: MEDIA_URL not used with presigned URLs - urls are generated dynamically
+else:
+    # Local storage for development
+    MEDIA_URL = 'media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
 
 # Frontend build directory (served by whitenoise in production)
 WHITENOISE_ROOT = BASE_DIR / 'staticfiles' / 'frontend'

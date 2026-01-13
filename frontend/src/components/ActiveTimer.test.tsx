@@ -23,6 +23,7 @@ describe('ActiveTimer', () => {
     end_time: null,
     duration_seconds: 3600,
     is_active: true,
+    activity_tags: [],
     is_interruption: false,
     interrupted_entry: null,
     is_paused: false,
@@ -33,6 +34,7 @@ describe('ActiveTimer', () => {
     job_category_detail: null,
     job_code_detail: null,
     paused_entry: null,
+    photos: [],
   };
 
   it('displays job name', () => {

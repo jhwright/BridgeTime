@@ -7,8 +7,8 @@ vi.mock('../hooks/useApi');
 
 describe('EmployeeSelect', () => {
   const mockEmployees = [
-    { id: 1, first_name: 'John', last_name: 'Doe', full_name: 'John Doe', email: '', is_active: true, gusto_id: null },
-    { id: 2, first_name: 'Jane', last_name: 'Smith', full_name: 'Jane Smith', email: '', is_active: true, gusto_id: null },
+    { id: 1, first_name: 'John', last_name: 'Doe', full_name: 'John Doe', email: '', is_active: true, gusto_id: null, has_pin: false },
+    { id: 2, first_name: 'Jane', last_name: 'Smith', full_name: 'Jane Smith', email: '', is_active: true, gusto_id: null, has_pin: true },
   ];
 
   beforeEach(() => {

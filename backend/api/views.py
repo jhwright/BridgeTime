@@ -5,12 +5,17 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Employee, JobCodeCategory, JobCode, TimeEntry
+from rest_framework.parsers import MultiPartParser, FormParser
+
+from .models import Employee, JobCodeCategory, JobCode, TimeEntry, ActivityTag, TimeEntryPhoto
 from .serializers import (
     EmployeeSerializer, JobCodeCategorySerializer, JobCodeSerializer,
     TimeEntrySerializer, TimeEntryDetailSerializer,
     ClockStartSerializer, ClockStopSerializer,
-    InterruptedStartSerializer, InterruptedStopSerializer
+    InterruptedStartSerializer, InterruptedStopSerializer,
+    ActivityTagSerializer,
+    SessionStartSerializer, SessionStopSerializer, SessionSwitchSerializer, SessionTagUpdateSerializer,
+    VerifyPinSerializer, SetPinSerializer, TimeEntryPhotoSerializer
 )
 
 
@@ -34,6 +39,54 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         serializer = TimeEntryDetailSerializer(active_entry)
         return Response({'current_entry': serializer.data})
+
+    @action(detail=True, methods=['post'], url_path='set-pin')
+    def set_pin(self, request, pk=None):
+        """Set the PIN for an employee."""
+        employee = self.get_object()
+        serializer = SetPinSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        employee.set_pin(serializer.validated_data['pin'])
+        employee.save()
+
+        return Response({'success': True, 'message': 'PIN set successfully'})
+
+
+class VerifyPinView(APIView):
+    """Verify an employee's PIN."""
+
+    def post(self, request):
+        serializer = VerifyPinSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        employee_id = serializer.validated_data['employee_id']
+        pin = serializer.validated_data['pin']
+
+        try:
+            employee = Employee.objects.get(id=employee_id, is_active=True)
+        except Employee.DoesNotExist:
+            return Response(
+                {'valid': False, 'error': 'Employee not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not employee.has_pin:
+            return Response(
+                {'valid': False, 'error': 'Employee has no PIN set'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if employee.check_pin(pin):
+            return Response({
+                'valid': True,
+                'employee': EmployeeSerializer(employee).data
+            })
+        else:
+            return Response(
+                {'valid': False, 'error': 'Invalid PIN'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
 
 class JobCodeCategoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -330,3 +383,373 @@ class InterruptedStopView(APIView):
             'closed_interruption': TimeEntryDetailSerializer(interruption_entry).data,
             'resumed_entry': None
         })
+
+
+class ActivityTagViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for activity tags."""
+    queryset = ActivityTag.objects.filter(is_active=True).select_related('role')
+    serializer_class = ActivityTagSerializer
+
+    @action(detail=False, methods=['get'])
+    def global_tags(self, request):
+        """Get only global tags (not role-specific)."""
+        tags = self.queryset.filter(role__isnull=True)
+        serializer = self.get_serializer(tags, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='for-role/(?P<role_id>[^/.]+)')
+    def for_role(self, request, role_id=None):
+        """Get tags available for a specific role (global + role-specific)."""
+        tags = self.queryset.filter(Q(role__isnull=True) | Q(role_id=role_id))
+        serializer = self.get_serializer(tags, many=True)
+        return Response(serializer.data)
+
+
+class SessionStartView(APIView):
+    """Start a new session (role-based, no employee required)."""
+
+    def post(self, request):
+        serializer = SessionStartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        role_id = serializer.validated_data['role_id']
+        job_code_id = serializer.validated_data.get('job_code_id')
+        performer_name = serializer.validated_data.get('performer_name', '')
+        activity_tag_ids = serializer.validated_data.get('activity_tag_ids', [])
+
+        # Get role (job category)
+        try:
+            role = JobCodeCategory.objects.get(id=role_id, is_active=True)
+        except JobCodeCategory.DoesNotExist:
+            return Response(
+                {'error': 'Role not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get job code if provided
+        job_code = None
+        if job_code_id:
+            try:
+                job_code = JobCode.objects.get(id=job_code_id, is_active=True)
+                if job_code.category_id != role_id:
+                    return Response(
+                        {'error': 'Job code does not belong to the specified role'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except JobCode.DoesNotExist:
+                return Response(
+                    {'error': 'Job code not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        now = timezone.now()
+
+        # Create new session
+        session = TimeEntry.objects.create(
+            job_category=role,
+            job_code=job_code,
+            start_time=now,
+            performer_name=performer_name
+        )
+
+        # Add activity tags if provided
+        if activity_tag_ids:
+            tags = ActivityTag.objects.filter(id__in=activity_tag_ids, is_active=True)
+            session.activity_tags.set(tags)
+
+        return Response(
+            TimeEntryDetailSerializer(session).data,
+            status=status.HTTP_201_CREATED
+        )
+
+
+class SessionStopView(APIView):
+    """Stop a session."""
+
+    def post(self, request):
+        serializer = SessionStopSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        session_id = serializer.validated_data.get('session_id')
+
+        if session_id:
+            try:
+                session = TimeEntry.objects.get(id=session_id, end_time__isnull=True)
+            except TimeEntry.DoesNotExist:
+                return Response(
+                    {'error': 'Active session not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            # Stop the most recent active session
+            session = TimeEntry.objects.filter(
+                end_time__isnull=True,
+                is_paused=False
+            ).order_by('-start_time').first()
+
+            if not session:
+                return Response(
+                    {'error': 'No active session found'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        session.end_time = timezone.now()
+        session.save()
+
+        return Response(TimeEntryDetailSerializer(session).data)
+
+
+class SessionSwitchView(APIView):
+    """Switch from current role to a new role (ends current, starts new)."""
+
+    def post(self, request):
+        serializer = SessionSwitchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        role_id = serializer.validated_data['role_id']
+        job_code_id = serializer.validated_data.get('job_code_id')
+        performer_name = serializer.validated_data.get('performer_name', '')
+
+        # Get new role
+        try:
+            role = JobCodeCategory.objects.get(id=role_id, is_active=True)
+        except JobCodeCategory.DoesNotExist:
+            return Response(
+                {'error': 'Role not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get job code if provided
+        job_code = None
+        if job_code_id:
+            try:
+                job_code = JobCode.objects.get(id=job_code_id, is_active=True)
+                if job_code.category_id != role_id:
+                    return Response(
+                        {'error': 'Job code does not belong to the specified role'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except JobCode.DoesNotExist:
+                return Response(
+                    {'error': 'Job code not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        now = timezone.now()
+
+        # End current active session(s)
+        ended_sessions = []
+        active_sessions = TimeEntry.objects.filter(
+            end_time__isnull=True,
+            is_paused=False
+        )
+        for session in active_sessions:
+            session.end_time = now
+            session.save()
+            ended_sessions.append(TimeEntryDetailSerializer(session).data)
+
+        # Start new session
+        new_session = TimeEntry.objects.create(
+            job_category=role,
+            job_code=job_code,
+            start_time=now,
+            performer_name=performer_name
+        )
+
+        return Response({
+            'ended_sessions': ended_sessions,
+            'new_session': TimeEntryDetailSerializer(new_session).data
+        }, status=status.HTTP_201_CREATED)
+
+
+class SessionTagsView(APIView):
+    """Update tags on an active session."""
+
+    def patch(self, request, session_id):
+        serializer = SessionTagUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        tag_ids = serializer.validated_data['tag_ids']
+
+        try:
+            session = TimeEntry.objects.get(id=session_id, end_time__isnull=True)
+        except TimeEntry.DoesNotExist:
+            return Response(
+                {'error': 'Active session not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Update tags
+        tags = ActivityTag.objects.filter(id__in=tag_ids, is_active=True)
+        session.activity_tags.set(tags)
+
+        return Response(TimeEntryDetailSerializer(session).data)
+
+
+class ActiveSessionView(APIView):
+    """Get the current active session (for role-based tracking without employee)."""
+
+    def get(self, request):
+        # Get the most recent active session
+        session = TimeEntry.objects.filter(
+            end_time__isnull=True,
+            is_paused=False
+        ).select_related(
+            'employee', 'job_category', 'job_code'
+        ).prefetch_related('activity_tags').order_by('-start_time').first()
+
+        if not session:
+            return Response({'active_session': None})
+
+        return Response({
+            'active_session': TimeEntryDetailSerializer(session).data
+        })
+
+
+class InsightsRoleHoursView(APIView):
+    """Get hours breakdown by role for a date range."""
+
+    def get(self, request):
+        from django.db.models import Sum, F
+        from django.db.models.functions import Coalesce
+        from datetime import timedelta
+
+        # Parse date range (default: last 7 days)
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        queryset = TimeEntry.objects.filter(end_time__isnull=False)
+
+        if start_date:
+            queryset = queryset.filter(start_time__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(start_time__date__lte=end_date)
+
+        # Aggregate hours by role (job_category)
+        role_hours = queryset.values(
+            'job_category__id', 'job_category__name'
+        ).annotate(
+            total_seconds=Sum(
+                F('end_time') - F('start_time'),
+                output_field=models.DurationField()
+            )
+        ).order_by('-total_seconds')
+
+        results = []
+        for item in role_hours:
+            if item['total_seconds']:
+                total_seconds = item['total_seconds'].total_seconds()
+                results.append({
+                    'role_id': item['job_category__id'],
+                    'role_name': item['job_category__name'],
+                    'total_hours': round(total_seconds / 3600, 2),
+                    'total_seconds': total_seconds
+                })
+
+        return Response({'role_hours': results})
+
+
+class InsightsTagDistributionView(APIView):
+    """Get activity tag distribution for a date range."""
+
+    def get(self, request):
+        from django.db.models import Count
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        role_id = request.query_params.get('role_id')
+
+        queryset = TimeEntry.objects.filter(end_time__isnull=False)
+
+        if start_date:
+            queryset = queryset.filter(start_time__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(start_time__date__lte=end_date)
+        if role_id:
+            queryset = queryset.filter(job_category_id=role_id)
+
+        # Count sessions by tag
+        tag_counts = ActivityTag.objects.filter(
+            time_entries__in=queryset
+        ).annotate(
+            session_count=Count('time_entries')
+        ).values('id', 'name', 'color', 'session_count').order_by('-session_count')
+
+        # Also count sessions without tags
+        sessions_with_tags = queryset.filter(activity_tags__isnull=False).distinct().count()
+        total_sessions = queryset.count()
+        sessions_without_tags = total_sessions - sessions_with_tags
+
+        return Response({
+            'tag_distribution': list(tag_counts),
+            'sessions_without_tags': sessions_without_tags,
+            'total_sessions': total_sessions
+        })
+
+
+class InsightsPatternsView(APIView):
+    """Get time-of-day and day-of-week patterns."""
+
+    def get(self, request):
+        from django.db.models import Count
+        from django.db.models.functions import ExtractHour, ExtractWeekDay
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        role_id = request.query_params.get('role_id')
+
+        queryset = TimeEntry.objects.filter(end_time__isnull=False)
+
+        if start_date:
+            queryset = queryset.filter(start_time__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(start_time__date__lte=end_date)
+        if role_id:
+            queryset = queryset.filter(job_category_id=role_id)
+
+        # Hour distribution (0-23)
+        hour_distribution = queryset.annotate(
+            hour=ExtractHour('start_time')
+        ).values('hour').annotate(
+            count=Count('id')
+        ).order_by('hour')
+
+        # Day of week distribution (1=Sunday, 7=Saturday in Django)
+        day_distribution = queryset.annotate(
+            day=ExtractWeekDay('start_time')
+        ).values('day').annotate(
+            count=Count('id')
+        ).order_by('day')
+
+        # Map day numbers to names
+        day_names = {1: 'Sunday', 2: 'Monday', 3: 'Tuesday', 4: 'Wednesday',
+                     5: 'Thursday', 6: 'Friday', 7: 'Saturday'}
+
+        day_data = [
+            {'day': day_names.get(item['day'], item['day']), 'day_number': item['day'], 'count': item['count']}
+            for item in day_distribution
+        ]
+
+        return Response({
+            'hour_distribution': list(hour_distribution),
+            'day_distribution': day_data
+        })
+
+
+class TimeEntryPhotoViewSet(viewsets.ModelViewSet):
+    """ViewSet for time entry photos."""
+    queryset = TimeEntryPhoto.objects.all().select_related('time_entry')
+    serializer_class = TimeEntryPhotoSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        time_entry_id = self.request.query_params.get('time_entry')
+        if time_entry_id:
+            queryset = queryset.filter(time_entry_id=time_entry_id)
+        return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
