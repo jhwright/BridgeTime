@@ -21,7 +21,7 @@ export function EmployeeManagementPage() {
 
   // Add employee form
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({ first_name: '', last_name: '', email: '', pin: '' });
+  const [newEmployee, setNewEmployee] = useState({ name: '', pin: '' });
   const [addError, setAddError] = useState<string | null>(null);
 
   // Set PIN modal
@@ -99,10 +99,14 @@ export function EmployeeManagementPage() {
     e.preventDefault();
     setAddError(null);
 
-    if (!newEmployee.first_name || !newEmployee.last_name) {
-      setAddError('First and last name are required');
+    const nameParts = newEmployee.name.trim().split(/\s+/);
+    if (nameParts.length < 1 || !nameParts[0]) {
+      setAddError('Name is required');
       return;
     }
+
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || '-';
 
     if (newEmployee.pin && (!/^\d{4,10}$/.test(newEmployee.pin))) {
       setAddError('PIN must be 4-10 digits');
@@ -111,12 +115,11 @@ export function EmployeeManagementPage() {
 
     try {
       await adminAddEmployee(apiKey, {
-        first_name: newEmployee.first_name,
-        last_name: newEmployee.last_name,
-        email: newEmployee.email || undefined,
+        first_name: firstName,
+        last_name: lastName,
         pin: newEmployee.pin || undefined,
       });
-      setNewEmployee({ first_name: '', last_name: '', email: '', pin: '' });
+      setNewEmployee({ name: '', pin: '' });
       setShowAddForm(false);
       loadEmployees();
     } catch (err: unknown) {
@@ -209,36 +212,19 @@ export function EmployeeManagementPage() {
       {/* Add Employee Form */}
       {showAddForm && (
         <div className="modal-overlay" onClick={() => setShowAddForm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-compact" onClick={(e) => e.stopPropagation()}>
             <h2>Add Employee</h2>
             <form onSubmit={handleAddEmployee}>
               <div className="form-group">
-                <label htmlFor="first-name">First Name *</label>
+                <label htmlFor="emp-name">Name</label>
                 <input
-                  id="first-name"
+                  id="emp-name"
                   type="text"
-                  value={newEmployee.first_name}
-                  onChange={(e) => setNewEmployee({ ...newEmployee, first_name: e.target.value })}
+                  value={newEmployee.name}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                  placeholder="First Last"
                   required
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="last-name">Last Name *</label>
-                <input
-                  id="last-name"
-                  type="text"
-                  value={newEmployee.last_name}
-                  onChange={(e) => setNewEmployee({ ...newEmployee, last_name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="email">Email</label>
-                <input
-                  id="email"
-                  type="email"
-                  value={newEmployee.email}
-                  onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                  autoFocus
                 />
               </div>
               <div className="form-group">
@@ -259,7 +245,7 @@ export function EmployeeManagementPage() {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Add Employee
+                  Add
                 </button>
               </div>
             </form>
@@ -301,13 +287,11 @@ export function EmployeeManagementPage() {
       )}
 
       {/* Employee List */}
-      <table className="employee-table">
+      <table className="employee-table compact">
         <thead>
           <tr>
             <th>Name</th>
-            <th>Email</th>
             <th>PIN</th>
-            <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -315,36 +299,30 @@ export function EmployeeManagementPage() {
           {employees.map((emp) => (
             <tr key={emp.id}>
               <td>{emp.full_name}</td>
-              <td>{emp.email || '-'}</td>
               <td>
                 <span className={`pin-status ${emp.has_pin ? 'has-pin' : 'no-pin'}`}>
-                  {emp.has_pin ? 'Set' : 'Not Set'}
-                </span>
-              </td>
-              <td>
-                <span className={`status ${emp.is_active ? 'active' : 'inactive'}`}>
-                  {emp.is_active ? 'Active' : 'Inactive'}
+                  {emp.has_pin ? 'Set' : 'None'}
                 </span>
               </td>
               <td className="actions">
                 <button
-                  className="btn btn-sm btn-secondary"
+                  className="btn btn-xs btn-secondary"
                   onClick={() => setPinModal({ employeeId: emp.id, name: emp.full_name })}
                 >
-                  Set PIN
+                  PIN
                 </button>
                 <button
-                  className="btn btn-sm btn-danger"
+                  className="btn btn-xs btn-danger"
                   onClick={() => handleDelete(emp)}
                 >
-                  Delete
+                  Del
                 </button>
               </td>
             </tr>
           ))}
           {employees.length === 0 && !loading && (
             <tr>
-              <td colSpan={5} className="no-data">No employees found</td>
+              <td colSpan={3} className="no-data">No employees found</td>
             </tr>
           )}
         </tbody>
