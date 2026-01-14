@@ -114,18 +114,15 @@ export function EmployeeManagementPage() {
     }
 
     try {
-      console.log('Adding employee:', { first_name: firstName, last_name: lastName, pin: newEmployee.pin || undefined });
-      const result = await adminAddEmployee(apiKey, {
+      await adminAddEmployee(apiKey, {
         first_name: firstName,
         last_name: lastName,
         pin: newEmployee.pin || undefined,
       });
-      console.log('Add employee result:', result);
       setNewEmployee({ name: '', pin: '' });
       setShowAddForm(false);
       loadEmployees();
     } catch (err: unknown) {
-      console.error('Add employee error:', err);
       setAddError(getErrorMessage(err));
     }
   };

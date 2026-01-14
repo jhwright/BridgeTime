@@ -1574,11 +1574,6 @@ body {
   background-color: var(--gray-100);
 }
 
-.employee-table .actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
 .employee-table .no-data {
   text-align: center;
   color: var(--gray-500);
@@ -1629,10 +1624,6 @@ body {
   .employee-table th,
   .employee-table td {
     padding: 0.5rem;
-  }
-
-  .employee-table .actions {
-    flex-direction: column;
   }
 
   .actions-bar {
