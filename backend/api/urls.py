@@ -7,7 +7,7 @@ from .views import (
     ActivityTagViewSet, VerifyPinView, TimeEntryPhotoViewSet,
     SessionStartView, SessionStopView, SessionSwitchView, SessionTagsView, ActiveSessionView,
     InsightsRoleHoursView, InsightsTagDistributionView, InsightsPatternsView,
-    admin_list_employees, admin_add_employee, admin_set_pin, admin_delete_employee
+    admin_list_employees, admin_add_employee, admin_set_pin, admin_delete_employee, admin_seed_data
 )
 
 router = DefaultRouter()
@@ -42,4 +42,5 @@ urlpatterns = [
     path('admin/employees/add/', admin_add_employee, name='admin-add-employee'),
     path('admin/employees/<int:employee_id>/set-pin/', admin_set_pin, name='admin-set-pin'),
     path('admin/employees/<int:employee_id>/delete/', admin_delete_employee, name='admin-delete-employee'),
+    path('admin/seed/', admin_seed_data, name='admin-seed-data'),
 ]

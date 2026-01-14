@@ -917,3 +917,58 @@ def admin_delete_employee(request, employee_id):
     employee.delete()
 
     return Response({'message': f'Deleted employee: {full_name}'})
+
+
+@api_view(['POST'])
+@require_admin_key
+def admin_seed_data(request):
+    """Seed job categories, job codes, and optionally employees."""
+    data = request.data
+    results = {'categories': 0, 'codes': 0, 'employees': 0}
+
+    # Seed job categories
+    for cat_data in data.get('categories', []):
+        cat, created = JobCodeCategory.objects.get_or_create(
+            name=cat_data['name'],
+            defaults={'is_active': cat_data.get('is_active', True)}
+        )
+        if created:
+            results['categories'] += 1
+
+    # Seed job codes
+    for code_data in data.get('codes', []):
+        try:
+            category = JobCodeCategory.objects.get(name=code_data['category'])
+            code, created = JobCode.objects.get_or_create(
+                name=code_data['name'],
+                category=category,
+                defaults={
+                    'alias': code_data.get('alias', ''),
+                    'is_active': code_data.get('is_active', True)
+                }
+            )
+            if created:
+                results['codes'] += 1
+        except JobCodeCategory.DoesNotExist:
+            pass
+
+    # Seed employees (optional)
+    for emp_data in data.get('employees', []):
+        emp, created = Employee.objects.get_or_create(
+            first_name=emp_data['first_name'],
+            last_name=emp_data['last_name'],
+            defaults={
+                'email': emp_data.get('email', ''),
+                'is_active': emp_data.get('is_active', True)
+            }
+        )
+        if created:
+            results['employees'] += 1
+            if emp_data.get('pin'):
+                emp.set_pin(str(emp_data['pin']))
+                emp.save()
+
+    return Response({
+        'message': 'Data seeded successfully',
+        'created': results
+    }, status=status.HTTP_201_CREATED)
